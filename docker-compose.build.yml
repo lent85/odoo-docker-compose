@@ -11,6 +11,7 @@ services:
     volumes:
       - ./etc:/etc/odoo
       - ./addons:/mnt/extra-addons
+      - ./filestore:/var/lib/odoo/filestore
     environment:
       - HOST=db
       - PORT=5432

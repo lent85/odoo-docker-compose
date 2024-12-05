@@ -87,7 +87,7 @@ setup_target_directory() {
     mkdir -p "$TARGET_DIR"
     
     # Create directory structure
-    mkdir -p "$TARGET_DIR"/{etc,postgresql,addons,backups}
+    mkdir -p "$TARGET_DIR"/{etc,postgresql,addons,backups,filestore}
     chmod 777 "$TARGET_DIR/postgresql"
 
     # Copy necessary files from source
