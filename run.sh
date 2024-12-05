@@ -1,92 +1,123 @@
 #!/bin/bash
 
-# Check if required arguments are provided
-if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 <destination> <port> <chat_port> [build]"
-    echo "  build: Optional parameter to use self-built image"
-    exit 1
-fi
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-DESTINATION=$1
-PORT=$2
-CHAT=$3
-BUILD=${4:-"no"}  # Default to "no" if not provided
-ENV_FILE="$DESTINATION/.env"
-SECRET_FILE="$DESTINATION/.secret"
-
-# Generate secure random passwords
-ADMIN_PASS=$(openssl rand -base64 20 | tr -dc 'a-zA-Z0-9' | head -c 20)
-DB_PASS=$(openssl rand -base64 20 | tr -dc 'a-zA-Z0-9' | head -c 20)
-
-# Clone repository
-git clone --depth=1 https://github.com/lent85/odoo-docker-compose "$DESTINATION" || {
-    echo "Failed to clone repository"
-    exit 1
+# Function to check if a network exists
+check_network() {
+    if ! docker network ls | grep -q "apps-network"; then
+        echo -e "${YELLOW}Creating apps-network...${NC}"
+        docker network create apps-network
+    else
+        echo -e "${GREEN}apps-network already exists${NC}"
+    fi
 }
-rm -rf "$DESTINATION/.git"
 
-# Create .env file with secure configuration
-cat > "$ENV_FILE" << EOL
-ODOO_PORT=$PORT
-CHAT_PORT=$CHAT
+# Function to check if .env file exists
+check_env() {
+    if [ ! -f .env ]; then
+        echo -e "${YELLOW}Creating .env file...${NC}"
+        cat > .env << EOF
+# Database Configuration
 POSTGRES_DB=postgres
+POSTGRES_PASSWORD=odoo_pw
 POSTGRES_USER=odoo
-POSTGRES_PASSWORD=$DB_PASS
-ADMIN_PASSWORD=$ADMIN_PASS
-EOL
 
-# Update odoo.conf to use environment variables
-cat > "$DESTINATION/etc/odoo.conf" << EOL
+# Odoo Configuration
+# Comment out ports for production with NPM
+ODOO_PORT=8069
+CHAT_PORT=8072
+
+# Deployment Mode (dev/prod)
+DEPLOY_MODE=dev
+EOF
+        echo -e "${GREEN}.env file created${NC}"
+    else
+        echo -e "${GREEN}.env file exists${NC}"
+    fi
+}
+
+# Function to create Odoo config
+create_odoo_config() {
+    if [ ! -d "etc" ]; then
+        echo -e "${YELLOW}Creating Odoo configuration...${NC}"
+        mkdir -p etc
+        cat > etc/odoo.conf << EOF
 [options]
 addons_path = /mnt/extra-addons
-data_dir = /etc/odoo
-admin_passwd = ${ADMIN_PASS}
-logfile = /etc/odoo/odoo-server.log
-dev_mode = reload
-EOL
-
-# Create required directories
-mkdir -p "$DESTINATION/postgresql"
-mkdir -p "$DESTINATION/addons"
-mkdir -p "$DESTINATION/etc"
-
-# Ensure the entrypoint script is executable
-chmod +x "$DESTINATION/docker/odoo/entrypoint.sh"
-
-# Create requirements.txt if it doesn't exist
-touch "$DESTINATION/etc/requirements.txt"
-
-# Set proper permissions
-sudo chown -R "$(id -u):$(id -g)" "$DESTINATION"
-chmod -R 700 "$DESTINATION"
-chmod 600 "$ENV_FILE"
-
-# Store credentials securely
-cat > "$SECRET_FILE" << EOL
-Odoo Master Password: $ADMIN_PASS
-Database Password: $DB_PASS
-EOL
-chmod 600 "$SECRET_FILE"
-
-# Configure inotify if on Linux
-if [[ "$OSTYPE" != "darwin"* ]]; then
-    if ! grep -qF "fs.inotify.max_user_watches" /etc/sysctl.conf; then
-        echo "fs.inotify.max_user_watches = 524288" | sudo tee -a /etc/sysctl.conf
-        sudo sysctl -p
+data_dir = /var/lib/odoo
+admin_passwd = admin
+EOF
+        echo -e "${GREEN}Odoo configuration created${NC}"
+    else
+        echo -e "${GREEN}Odoo configuration exists${NC}"
     fi
-fi
+}
 
-# Start Odoo
-cd "$DESTINATION"
-if [ "$BUILD" = "build" ]; then
-    echo "Using self-built image..."
-    docker-compose -f docker-compose.build.yml up -d
+# Function to create necessary directories
+create_directories() {
+    mkdir -p {etc,postgresql,addons}
+    echo -e "${GREEN}Directories created/checked${NC}"
+}
+
+# Function to modify docker-compose for production
+prepare_compose_file() {
+    DEPLOY_MODE=$(grep DEPLOY_MODE .env | cut -d '=' -f2)
+    
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        echo -e "${YELLOW}Preparing for production mode (NPM)...${NC}"
+        # Comment out the ports section in docker-compose.yml
+        sed -i.bak '/ports:/,+2 s/^/#/' docker-compose.yml
+        echo -e "${GREEN}Ports have been commented out for NPM usage${NC}"
+    else
+        echo -e "${YELLOW}Preparing for development mode...${NC}"
+        # Uncomment the ports section if it was commented
+        sed -i.bak '/^#.*ports:/,+2 s/^#//' docker-compose.yml
+        echo -e "${GREEN}Ports have been uncommented for direct access${NC}"
+    fi
+}
+
+# Main execution
+echo -e "${YELLOW}Starting Odoo deployment setup...${NC}"
+
+# Create necessary directories
+create_directories
+
+# Check and create .env file
+check_env
+
+# Create Odoo configuration
+create_odoo_config
+
+# Check and create Docker network
+check_network
+
+# Prepare docker-compose file based on deployment mode
+prepare_compose_file
+
+# Start the containers
+echo -e "${YELLOW}Starting containers...${NC}"
+docker-compose down
+docker-compose up -d
+
+# Check container status
+echo -e "${YELLOW}Checking container status...${NC}"
+docker-compose ps
+
+echo -e "${GREEN}Setup complete!${NC}"
+
+# Print access information
+if [ "$(grep DEPLOY_MODE .env | cut -d '=' -f2)" = "dev" ]; then
+    ODOO_PORT=$(grep ODOO_PORT .env | cut -d '=' -f2)
+    echo -e "${GREEN}Odoo is accessible at:${NC}"
+    echo -e "Main application: ${YELLOW}http://localhost:${ODOO_PORT}${NC}"
+    echo -e "Chat/Longpolling: ${YELLOW}http://localhost:$(grep CHAT_PORT .env | cut -d '=' -f2)${NC}"
 else
-    echo "Using DockerHub image..."
-    docker-compose up -d
+    echo -e "${GREEN}Odoo is configured for NPM access${NC}"
+    echo -e "Please configure your proxy host in NPM with:"
+    echo -e "- Main application: ${YELLOW}odoo:8069${NC}"
+    echo -e "- Chat/Longpolling: ${YELLOW}odoo:8072${NC}"
 fi
-
-echo "Odoo is starting up. You can access it at:"
-echo "Main URL: http://localhost:$PORT"
-echo "Chat URL: http://localhost:$CHAT"
-echo "Credentials are saved in: $SECRET_FILE"

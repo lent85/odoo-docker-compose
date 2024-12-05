@@ -1,5 +1,5 @@
 services:
-  web:
+  odoo:
     build:
       context: ./docker/odoo
       dockerfile: Dockerfile
@@ -17,8 +17,11 @@ services:
       - USER=${POSTGRES_USER}
       - PASSWORD=${POSTGRES_PASSWORD}
     restart: unless-stopped
+    networks:
+      - inner-network
+      - apps-network  # This allows NPM to access Odoo
     
-  db:
+  odoo-db:
     image: postgres:17
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
@@ -27,3 +30,11 @@ services:
     volumes:
       - ./postgresql:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      - inner-network
+
+networks:
+  inner-network:
+    driver: bridge
+  apps-network:
+    external: true
