@@ -1,0 +1,18 @@
+# Generated directories
+postgresql/
+etc/odoo-server.log
+
+# Environment files
+.env
+.secret
+
+# Custom addons
+addons/*
+!addons/.gitkeep
+
+# IDE files
+.vscode/
+.idea/
+
+# System files
+.DS_Store

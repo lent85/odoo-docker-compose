@@ -1,0 +1,6 @@
+[options]
+addons_path = /mnt/extra-addons
+data_dir = /etc/odoo
+admin_passwd = ${ADMIN_PASSWORD}
+logfile = /etc/odoo/odoo-server.log
+dev_mode = reload
