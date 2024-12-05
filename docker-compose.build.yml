@@ -4,7 +4,7 @@ services:
       context: ./docker/odoo
       dockerfile: Dockerfile
     depends_on:
-      - db
+      - odoo-db
     ports:
       - "${ODOO_PORT}:8069"
       - "${CHAT_PORT}:8072"
