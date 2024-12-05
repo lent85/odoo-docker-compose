@@ -176,7 +176,7 @@ mkdir -p "$BACKUP_DIR"
 
 # Backup PostgreSQL database
 echo "Backing up PostgreSQL database..."
-docker-compose exec -T db pg_dump -U odoo postgres > "$BACKUP_DIR/db_backup_$TIMESTAMP.sql"
+docker compose exec -T db pg_dump -U odoo postgres > "$BACKUP_DIR/db_backup_$TIMESTAMP.sql"
 
 # Backup Odoo filestore
 echo "Backing up Odoo filestore..."
@@ -214,13 +214,13 @@ prepare_compose_file() {
 create_start_script() {
     cat > "$TARGET_DIR/start.sh" << 'EOF'
 #!/bin/bash
-docker-compose up -d
+docker compose up -d
 EOF
     chmod +x "$TARGET_DIR/start.sh"
     
     cat > "$TARGET_DIR/stop.sh" << 'EOF'
 #!/bin/bash
-docker-compose down
+docker compose down
 EOF
     chmod +x "$TARGET_DIR/stop.sh"
     
