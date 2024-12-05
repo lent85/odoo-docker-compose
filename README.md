@@ -44,7 +44,7 @@ This repository provides a streamlined setup for running Odoo using Docker Compo
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/odoo-docker-compose.git
+git clone https://github.com/lent85/odoo-docker-compose.git
 cd odoo-docker-compose
 ```
 
